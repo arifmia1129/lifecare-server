@@ -15,6 +15,22 @@ const port = process.env.PORT || 5000;
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ctfzx.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
+const verifyJWT = (req, res, next) => {
+    const reqAuth = req?.headers?.authorization;
+    if (!reqAuth) {
+        return res.status(401).send({ message: "Unauthorized Access!" });
+    }
+    const token = reqAuth.split(" ")[1];
+    jwt.verify(token, process.env.SECRET_KEY, (err, decoded) => {
+        if (err) {
+            return res.status(403).send({ message: "Forbidden Access!" });
+        }
+        req.decoded = decoded;
+        next();
+    })
+}
+
+
 async function run() {
     try {
         await client.connect();
@@ -41,7 +57,7 @@ async function run() {
             const token = jwt.sign({ email }, process.env.SECRET_KEY, {
                 expiresIn: '1h'
             })
-            res.send({result, token});
+            res.send({ result, token });
         })
     }
     finally {
