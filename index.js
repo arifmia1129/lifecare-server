@@ -36,7 +36,8 @@ async function run() {
         await client.connect();
 
         const doctorCollection = client.db("lifecare").collection("doctors");
-        const userCollection = client.db("lifecare").collection("users");
+        const userCollection = client.db("lifecare").collection("userr");
+        const appointmentCollection = client.db("lifecare").collection("appointment");
 
         app.get("/doctors", async (req, res) => {
             const query = {};
@@ -58,6 +59,12 @@ async function run() {
                 expiresIn: '1h'
             })
             res.send({ result, token });
+        })
+
+        app.post("/appointment", async (req, res) => {
+            const appointment = req.body;
+            const result = await appointmentCollection.insertOne(appointment);
+            res.send(result);
         })
     }
     finally {
