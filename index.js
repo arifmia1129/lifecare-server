@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require('cors');
 require('dotenv').config();
+var jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const app = express();
 
@@ -19,11 +20,28 @@ async function run() {
         await client.connect();
 
         const doctorCollection = client.db("lifecare").collection("doctors");
+        const userCollection = client.db("lifecare").collection("users");
 
         app.get("/doctors", async (req, res) => {
             const query = {};
             const doctors = await doctorCollection.find(query).toArray();
             res.send(doctors);
+        })
+
+        app.put("/users", async (req, res) => {
+            const email = req.query.email;
+            const filter = { email };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: {
+                    email
+                }
+            }
+            const result = await userCollection.updateOne(filter, updatedDoc, options);
+            const token = jwt.sign({ email }, process.env.SECRET_KEY, {
+                expiresIn: '1h'
+            })
+            res.send({result, token});
         })
     }
     finally {
