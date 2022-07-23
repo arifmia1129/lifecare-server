@@ -1,8 +1,11 @@
 const express = require("express");
 const cors = require('cors');
 require('dotenv').config();
-var jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const nodemailer = require('nodemailer');
+const sgTransport = require('nodemailer-sendgrid-transport');
+
 const app = express();
 
 
@@ -30,14 +33,75 @@ const verifyJWT = (req, res, next) => {
     })
 }
 
+const options = {
+    auth: {
+        api_key: process.env.APP_KEY
+    }
+}
+const mailClient = nodemailer.createTransport(sgTransport(options));
+
+
 
 async function run() {
     try {
         await client.connect();
 
         const doctorCollection = client.db("lifecare").collection("doctors");
-        const userCollection = client.db("lifecare").collection("userr");
+        const userCollection = client.db("lifecare").collection("users");
         const appointmentCollection = client.db("lifecare").collection("appointment");
+
+        const appointmentMail = (appointment) => {
+            const {
+                branch,
+                department,
+                length,
+                consultant,
+                date,
+                time,
+                patient,
+                phone,
+                address,
+                email
+            } = appointment;
+
+            const emailForSend = {
+                from: process.env.SOURCE_MAIL,
+                to: email,
+                subject: 'Your appointment has booked.',
+                text: `Your appointment has booked.`,
+                html: `
+                <div>
+                <h2>Assalamu Alaikum Dear Sir/Mam,</h2>,
+                <h2>We have receive your appointment.</h2>
+                <h3>Your appointment details:</h3>
+                <ol>
+                    <li>Branch: ${branch}</li>
+                    <li>Department: ${department}</li>
+                    <li>Session length: ${length} minute</li>
+                    <li>Consultant: Dr ${consultant}</li>
+                    <li>Date: ${date}</li>
+                    <li>Time: ${time}</li>
+                    <li>Patient name: ${patient}</li>
+                    <li>Phone: ${phone}</li>
+                    <li>Address: ${address}</li>
+                </ol>
+                <p>If you want confirm appointment please go to Dashboard panel and make sure payment.</p>
+                <h2>Thanks for your appointment.</h2>
+                <h2>Stay with us!</h2>
+                <br />
+                <h1>Life Care Team.</h1>
+            </div>
+                `
+            };
+            mailClient.sendMail(emailForSend, function (err, info) {
+                if (err) {
+                    console.log(err);
+                }
+                else {
+                    console.log(info);
+                }
+            });
+        }
 
         app.get("/doctors", async (req, res) => {
             const query = {};
@@ -64,6 +128,7 @@ async function run() {
         app.post("/appointment", async (req, res) => {
             const appointment = req.body;
             const result = await appointmentCollection.insertOne(appointment);
+            appointmentMail(appointment);
             res.send(result);
         })
     }
