@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require('cors');
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const nodemailer = require('nodemailer');
 const sgTransport = require('nodemailer-sendgrid-transport');
 
@@ -39,7 +39,6 @@ const options = {
     }
 }
 const mailClient = nodemailer.createTransport(sgTransport(options));
-
 
 
 async function run() {
@@ -95,10 +94,10 @@ async function run() {
             };
             mailClient.sendMail(emailForSend, function (err, info) {
                 if (err) {
-                    console.log(err);
+                    // console.log(err);
                 }
                 else {
-                    console.log(info);
+                    // console.log(info);
                 }
             });
         }
@@ -125,10 +124,22 @@ async function run() {
             res.send({ result, token });
         })
 
-        app.post("/appointment", async (req, res) => {
+        app.post("/appointment", verifyJWT, async (req, res) => {
+            const decodedEmail = req?.decoded?.email;
             const appointment = req.body;
             const result = await appointmentCollection.insertOne(appointment);
             appointmentMail(appointment);
+            res.send(result);
+        })
+        app.get("/appointment", verifyJWT, async (req, res) => {
+            const query = {};
+            const appointment = await appointmentCollection.find(query).toArray();
+            res.send(appointment);
+        })
+        app.delete("/appointment/:id", verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) };
+            const result = await appointmentCollection.deleteOne(query);
             res.send(result);
         })
     }
