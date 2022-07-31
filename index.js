@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const nodemailer = require('nodemailer');
 const sgTransport = require('nodemailer-sendgrid-transport');
+const stripe = require("stripe")(process.env.STRIPE_API_KEY);
 
 const app = express();
 
@@ -48,6 +49,7 @@ async function run() {
         const doctorCollection = client.db("lifecare").collection("doctors");
         const userCollection = client.db("lifecare").collection("users");
         const appointmentCollection = client.db("lifecare").collection("appointment");
+        const paymentCollection = client.db("lifecare").collection("payment");
 
         const appointmentMail = (appointment) => {
             const {
@@ -94,34 +96,118 @@ async function run() {
             };
             mailClient.sendMail(emailForSend, function (err, info) {
                 if (err) {
-                    // console.log(err);
+                    console.log(err);
                 }
                 else {
-                    // console.log(info);
+                    console.log(info);
                 }
             });
         }
+        const paymentMail = (paymentInfo) => {
+            const {
+                branch,
+                consultant,
+                date,
+                time,
+                phone,
+                department,
+                patient,
+                tnxId,
+                email
+            } = paymentInfo;
+
+            const emailForSend = {
+                from: process.env.SOURCE_MAIL,
+                to: email,
+                subject: 'Your payment have received.',
+                text: `Your payment have received.`,
+                html: `
+                <div>
+                <h2>Assalamu Alaikum Dear Sir/Mam,</h2>,
+                <h2>We have received your payment.</h2>
+                <h3>Your payment details:</h3>
+                <ol>
+                    <li>Transaction ID: ${tnxId}</li>
+                    <li>Branch: ${branch}</li>
+                    <li>Department: ${department}</li>
+                    <li>Consultant: Dr ${consultant}</li>
+                    <li>Date: ${date}</li>
+                    <li>Time: ${time}</li>
+                    <li>Patient name: ${patient}</li>
+                    <li>Phone: ${phone}</li>
+                </ol>
+                <p>Please attend to doctor right time.</p>
+                <h2>Thanks for your payment.</h2>
+                <h2>Stay with us!</h2>
+                <br />
+                <h1>Life Care Team.</h1>
+            </div>
+                `
+            };
+            mailClient.sendMail(emailForSend, function (err, info) {
+                if (err) {
+                    console.log(err);
+                }
+                else {
+                    console.log(info);
+                }
+            });
+        }
+
+        app.post("/create-payment-intent", async (req, res) => {
+            const { price } = req.body;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: price * 100,
+                currency: "usd",
+                payment_method_types: [
+                    "card"
+                ]
+            });
+
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        });
 
         app.get("/doctors", async (req, res) => {
             const query = {};
             const doctors = await doctorCollection.find(query).toArray();
             res.send(doctors);
         })
-
-        app.put("/users", async (req, res) => {
+        app.get("/user", async (req, res) => {
             const email = req.query.email;
+            const query = { email };
+            const user = await userCollection.findOne(query);
+            res.send(user);
+        })
+
+        app.put("/user", async (req, res) => {
+            const user = req.body;
+            const email = req.body.email;
             const filter = { email };
             const options = { upsert: true };
             const updatedDoc = {
-                $set: {
-                    email
-                }
+                $set: user
             }
             const result = await userCollection.updateOne(filter, updatedDoc, options);
             const token = jwt.sign({ email }, process.env.SECRET_KEY, {
                 expiresIn: '1h'
             })
             res.send({ result, token });
+        })
+        app.put("/users-edit", async (req, res) => {
+            const email = req.query.email;
+            const user = req.body;
+            const filter = { email };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: {
+                    user
+                }
+            }
+            const result = await userCollection.updateOne(filter, updatedDoc, options);
+
+            res.send(result);
         })
 
         app.post("/appointment", verifyJWT, async (req, res) => {
@@ -132,14 +218,42 @@ async function run() {
             res.send(result);
         })
         app.get("/appointment", verifyJWT, async (req, res) => {
-            const query = {};
+            const email = req.query.email;
+            const query = { email };
             const appointment = await appointmentCollection.find(query).toArray();
             res.send(appointment);
         })
+        app.get("/appointment/:id", verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) };
+            const appointment = await appointmentCollection.findOne(query);
+            res.send(appointment);
+        })
+
+        app.put("/appointment/:id", async (req, res) => {
+            const id = req.params.id;
+            const update = req.body;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: update
+            }
+            const options = { upsert: true };
+            const result = await appointmentCollection.updateOne(filter, updatedDoc, options);
+
+            res.send(result);
+        })
+
         app.delete("/appointment/:id", verifyJWT, async (req, res) => {
             const id = req.params.id;
             const query = { _id: ObjectId(id) };
             const result = await appointmentCollection.deleteOne(query);
+            res.send(result);
+        })
+
+        app.post("/payment", verifyJWT, async (req, res) => {
+            const paymentInfo = req.body;
+            const result = await paymentCollection.insertOne(paymentInfo);
+            paymentMail(paymentInfo);
             res.send(result);
         })
     }
