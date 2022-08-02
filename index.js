@@ -50,6 +50,7 @@ async function run() {
         const userCollection = client.db("lifecare").collection("users");
         const appointmentCollection = client.db("lifecare").collection("appointment");
         const paymentCollection = client.db("lifecare").collection("payment");
+        const reviewCollection = client.db("lifecare").collection("review");
 
         const appointmentMail = (appointment) => {
             const {
@@ -254,6 +255,16 @@ async function run() {
             const paymentInfo = req.body;
             const result = await paymentCollection.insertOne(paymentInfo);
             paymentMail(paymentInfo);
+            res.send(result);
+        })
+        app.get("/review", async (req, res) => {
+            const query = {};
+            const review = await reviewCollection.find(query).toArray();
+            res.send(review);
+        })
+        app.post("/review", verifyJWT, async (req, res) => {
+            const review = req.body;
+            const result = await reviewCollection.insertOne(review);
             res.send(result);
         })
     }
