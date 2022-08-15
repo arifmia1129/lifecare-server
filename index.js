@@ -34,6 +34,8 @@ const verifyJWT = (req, res, next) => {
     })
 }
 
+
+
 const options = {
     auth: {
         api_key: process.env.APP_KEY
@@ -155,6 +157,24 @@ async function run() {
             });
         }
 
+        const verifyAdmin = async (req, res, next) => {
+            const adminRequestEmail = req.decoded.email;
+            const user = await userCollection.findOne({ email: adminRequestEmail });
+            if (user.role === 'admin') {
+                next();
+            }
+            else {
+                res.status(403).send({ message: "forbidden access" })
+            }
+        }
+
+        app.get('/admin/:email', verifyJWT, async (req, res) => {
+            const email = req.params.email;
+            const user = await userCollection.findOne({ email });
+            const isAdmin = user?.role === "admin";
+            res.send(isAdmin);
+        })
+
         app.post("/create-payment-intent", async (req, res) => {
             const { price } = req.body;
             const paymentIntent = await stripe.paymentIntents.create({
@@ -181,7 +201,11 @@ async function run() {
             const user = await userCollection.findOne(query);
             res.send(user);
         })
-
+        app.get("/users", verifyJWT, async (req, res) => {
+            const query = {}
+            const users = await userCollection.find(query).toArray();
+            res.send(users);
+        })
         app.put("/user", async (req, res) => {
             const user = req.body;
             const email = req.body.email;
@@ -212,7 +236,6 @@ async function run() {
         })
 
         app.post("/appointment", verifyJWT, async (req, res) => {
-            const decodedEmail = req?.decoded?.email;
             const appointment = req.body;
             const result = await appointmentCollection.insertOne(appointment);
             appointmentMail(appointment);
@@ -221,6 +244,11 @@ async function run() {
         app.get("/appointment", verifyJWT, async (req, res) => {
             const email = req.query.email;
             const query = { email };
+            const appointment = await appointmentCollection.find(query).toArray();
+            res.send(appointment);
+        })
+        app.get("/appointments", verifyJWT, async (req, res) => {
+            const query = {};
             const appointment = await appointmentCollection.find(query).toArray();
             res.send(appointment);
         })
@@ -265,6 +293,18 @@ async function run() {
         app.post("/review", verifyJWT, async (req, res) => {
             const review = req.body;
             const result = await reviewCollection.insertOne(review);
+            res.send(result);
+        })
+        app.put("/user/:id", async (req, res) => {
+            const id = req.params.id;
+            const update = req.body;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: update
+            }
+            const options = { upsert: true };
+            const result = await userCollection.updateOne(filter, updatedDoc, options);
+
             res.send(result);
         })
     }
